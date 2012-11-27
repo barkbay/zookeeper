@@ -92,10 +92,10 @@ public class ZooKeeperSaslClient {
         String clientSection = System.getProperty(ZooKeeperSaslClient.LOGIN_CONTEXT_NAME_KEY, "Client");
         // Note that 'Configuration' here refers to javax.security.auth.login.Configuration.
         AppConfigurationEntry entries[] = null;
-        SecurityException securityException = null;
+        RuntimeException securityException = null;
         try {
             entries = Configuration.getConfiguration().getAppConfigurationEntry(clientSection);
-        } catch (SecurityException e) {
+        } catch (RuntimeException e) {
             // handle below: might be harmless if the user doesn't intend to use JAAS authentication.
             securityException = e;
         }
