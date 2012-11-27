@@ -512,7 +512,7 @@ public class ZooKeeperSaslClient {
             // scheme, or tunnelled authentication has completed (successfully or
             // not), and all server SASL messages have been received.
             return false;
-        } catch (SecurityException e) {
+        } catch (RuntimeException e) {
             // Thrown if the caller does not have permission to retrieve the Configuration.
             // In this case, simply returning false is correct.
             if (LOG.isDebugEnabled() == true) {
