@@ -18,6 +18,8 @@
 
 package org.apache.zookeeper.test;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -32,6 +34,7 @@ import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooDefs.Ids;
+import org.apache.zookeeper.client.ZooKeeperSaslClient.SaslState;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Id;
 import org.junit.Assert;
@@ -139,6 +142,39 @@ public class SaslAuthTest extends ClientBase {
             }
             finally {
                 i++;
+            }
+        }
+    }
+    
+    /**
+     * Wait for the SASL authentication to be complete
+     * 
+     * @param zooKeeper
+     * @param timeoutInMS
+     * @throws InterruptedException
+     */
+    private void waitForSaslComplete(final ZooKeeper zooKeeper, final long timeoutInMS) throws InterruptedException {
+        SaslState saslState = zooKeeper.getSaslClient().getSaslState();
+        long timeout = System.currentTimeMillis() + timeoutInMS;
+        while (saslState == SaslState.INITIAL || saslState == SaslState.INTERMEDIATE) {
+            System.err.println(saslState);
+            if ( System.currentTimeMillis() > timeout) break;
+            Thread.sleep(100L);
+            saslState = zooKeeper.getSaslClient().getSaslState();
+        }      
+    }
+    
+    @Test
+    public void testSaslStateComplete() throws Exception {
+        ZooKeeper zk = null;
+        try {
+            zk = createClient();
+            waitForSaslComplete(zk, 5000);
+            assertEquals(SaslState.COMPLETE, zk.getSaslClient().getSaslState());
+            Thread.sleep(1000);
+        } finally {
+            if (zk != null) {
+                zk.close();
             }
         }
     }

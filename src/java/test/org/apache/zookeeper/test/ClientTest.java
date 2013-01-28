@@ -19,6 +19,7 @@
 package org.apache.zookeeper.test;
 
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -38,6 +39,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooDefs.Perms;
 import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.client.ZooKeeperSaslClient.SaslState;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Id;
 import org.apache.zookeeper.data.Stat;
@@ -778,6 +780,21 @@ public class ClientTest extends ClientBase {
             zk.exists("/m1", false);
             fail("The connection should have been closed");
         } catch (KeeperException.ConnectionLossException expected) {
+        }
+    }
+    
+    @Test
+    public void testSaslStateNoConfiguration() throws Exception {
+        ZooKeeper zk = null;
+        try {
+            zk = createClient();
+            assertEquals(SaslState.NO_CONFIGURATION, zk.getSaslClient()
+                    .getSaslState());
+            Thread.sleep(1000);
+        } finally {
+            if (zk != null) {
+                zk.close();
+            }
         }
     }
 }
