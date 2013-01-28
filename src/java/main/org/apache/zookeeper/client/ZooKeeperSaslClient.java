@@ -63,14 +63,56 @@ public class ZooKeeperSaslClient {
     private byte[] saslToken = new byte[0];
 
     public enum SaslState {
-        INITIAL,INTERMEDIATE,COMPLETE,FAILED
+        INITIAL, INTERMEDIATE, COMPLETE, FAILED, NO_CONFIGURATION
     }
 
-    private SaslState saslState = SaslState.INITIAL;
+    private SaslState saslState = getInitialSaslState();
 
     private boolean gotLastPacket = false;
     /** informational message indicating the current configuration status */
     private final String configStatus;
+    
+    /**
+     * Check if a secured SASL connection must be used
+     * 
+     * @return {@link SaslState#INITIAL} if an SASL connection must be
+     *         established, {@link SaslState#NO_CONFIGURATION} otherwise
+     */
+    private SaslState getInitialSaslState() {
+        final boolean explicitClientSection = System
+                .getProperty(ZooKeeperSaslClient.LOGIN_CONTEXT_NAME_KEY) != null;
+        
+        final boolean jassConfKey = System.getProperty(Environment.JAAS_CONF_KEY) != null;
+
+        if (explicitClientSection || jassConfKey) {
+            //user explicitly set something SASL-related
+            return SaslState.INITIAL;
+        }
+
+        AppConfigurationEntry[] appConfigurationEntry = null;
+        final String loginCtxNameKey = System.getProperty(
+                ZooKeeperSaslClient.LOGIN_CONTEXT_NAME_KEY, "Client");
+        try {
+            appConfigurationEntry = Configuration.getConfiguration()
+                    .getAppConfigurationEntry(loginCtxNameKey);
+        } catch (RuntimeException e) {
+            /*
+             * getAppConfigurationEntry(..) has not be designed to throw a checked
+             * exception, so any runtime exception must be catched
+             */
+            if (LOG.isDebugEnabled() == true) {
+                LOG.debug("Could not retrieve login configuration: " + e);
+            }
+            return SaslState.NO_CONFIGURATION;
+        }
+
+        // Is there a configuration ?
+        if (appConfigurationEntry != null) {
+            return SaslState.INITIAL;
+        }
+        // Else ignore SASL configuration
+        return SaslState.NO_CONFIGURATION;
+    }
 
     public SaslState getSaslState() {
         return saslState;
@@ -84,6 +126,13 @@ public class ZooKeeperSaslClient {
 
     public ZooKeeperSaslClient(final String serverPrincipal)
             throws LoginException {
+        
+        if (saslState == SaslState.NO_CONFIGURATION) {
+            this.configStatus = "SASL is not configured";
+            // Simply return
+            return;
+        }
+        
         /**
          * ZOOKEEPER-1373: allow system property to specify the JAAS
          * configuration section that the zookeeper client should use.
@@ -480,46 +529,31 @@ public class ZooKeeperSaslClient {
     }
 
     public boolean clientTunneledAuthenticationInProgress() {
-        // TODO: Rather than checking a disjunction here, should be a single member
-        // variable or method in this class to determine whether the client is
-        // configured to use SASL. (see also ZOOKEEPER-1455).
-        try {
-  	    if ((System.getProperty(Environment.JAAS_CONF_KEY) != null) ||
-              ((javax.security.auth.login.Configuration.getConfiguration() != null) &&
-                  (javax.security.auth.login.Configuration.getConfiguration().
-                       getAppConfigurationEntry(System.
-                       getProperty(ZooKeeperSaslClient.LOGIN_CONTEXT_NAME_KEY,"Client")) 
-                           != null))) {
-                // Client is configured to use a valid login Configuration, so
-                // authentication is either in progress, successful, or failed.
+        if (saslState == SaslState.NO_CONFIGURATION) {
+            return false;
+        } else {
+            // Client is configured to use a valid login Configuration, so
+            // authentication is either in progress, successful, or failed.
 
-                // 1. Authentication hasn't finished yet: we must wait for it to do so.
-                if ((isComplete() == false) &&
-                    (isFailed() == false)) {
-                    return true;
-                }
+            // 1. Authentication hasn't finished yet: we must wait for it to do so.
+            if ((isComplete() == false) &&
+                (isFailed() == false)) {
+                return true;
+            }
 
-                // 2. SASL authentication has succeeded or failed..
-                if (isComplete() || isFailed()) {
-                    if (gotLastPacket == false) {
-                        // ..but still in progress, because there is a final SASL
-                        // message from server which must be received.
-                    return true;
-                    }
+            // 2. SASL authentication has succeeded or failed..
+            if (isComplete() || isFailed()) {
+                if (gotLastPacket == false) {
+                    // ..but still in progress, because there is a final SASL
+                    // message from server which must be received.
+                return true;
                 }
             }
-            // Either client is not configured to use a tunnelled authentication
-            // scheme, or tunnelled authentication has completed (successfully or
-            // not), and all server SASL messages have been received.
-            return false;
-        } catch (RuntimeException e) {
-            // Thrown if the caller does not have permission to retrieve the Configuration.
-            // In this case, simply returning false is correct.
-            if (LOG.isDebugEnabled() == true) {
-                LOG.debug("Could not retrieve login configuration: " + e);
-            }
-            return false;
         }
+        // Either client is not configured to use a tunnelled authentication
+        // scheme, or tunnelled authentication has completed (successfully or
+        // not), and all server SASL messages have been received.
+        return false;
     }
 
 
