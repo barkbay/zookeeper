@@ -20,10 +20,12 @@ package org.apache.zookeeper.server.quorum;
 
 import static org.junit.Assert.assertEquals;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
@@ -36,6 +38,7 @@ import org.apache.jute.BinaryInputArchive;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.jute.InputArchive;
 import org.apache.jute.OutputArchive;
+import org.apache.zookeeper.PortAssignment;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.Watcher.Event.EventType;
@@ -43,16 +46,19 @@ import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.server.ByteBufferInputStream;
 import org.apache.zookeeper.server.ByteBufferOutputStream;
+import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.ServerCnxn;
 import org.apache.zookeeper.server.ServerCnxnFactory;
 import org.apache.zookeeper.server.ZKDatabase;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
+import org.apache.zookeeper.server.persistence.Util;
 import org.apache.zookeeper.server.quorum.QuorumPeer.QuorumServer;
 import org.apache.zookeeper.server.quorum.flexible.QuorumMaj;
 import org.apache.zookeeper.server.util.ZxidUtils;
 import org.apache.zookeeper.txn.CreateSessionTxn;
 import org.apache.zookeeper.txn.CreateTxn;
+import org.apache.zookeeper.txn.ErrorTxn;
 import org.apache.zookeeper.txn.SetDataTxn;
 import org.apache.zookeeper.txn.TxnHeader;
 import org.junit.Assert;
@@ -822,15 +828,6 @@ public class Zab1_0Test {
                 oa.writeRecord(qp, null);
 
                 readPacketSkippingPing(ia, qp);
-                Assert.assertEquals(Leader.NEWLEADER, qp.getType());
-                Assert.assertEquals(ZxidUtils.makeZxid(1, 0), qp.getZxid());
-                Assert.assertEquals(1, l.self.getAcceptedEpoch());
-                Assert.assertEquals(1, l.self.getCurrentEpoch());
-                
-                qp = new QuorumPacket(Leader.ACK, qp.getZxid(), null, null);
-                oa.writeRecord(qp, null);
-
-                readPacketSkippingPing(ia, qp);
                 Assert.assertEquals(Leader.UPTODATE, qp.getType());
             }
         });
@@ -867,13 +864,6 @@ public class Zab1_0Test {
                 oa.writeRecord(qp, null);
                 readPacketSkippingPing(ia, qp);
                 Assert.assertEquals(Leader.DIFF, qp.getType());
-                readPacketSkippingPing(ia, qp);
-                Assert.assertEquals(Leader.NEWLEADER, qp.getType());
-                Assert.assertEquals(ZxidUtils.makeZxid(21, 0), qp.getZxid());
-
-                qp = new QuorumPacket(Leader.ACK, qp.getZxid(), null, null);
-                oa.writeRecord(qp, null);
-
                 readPacketSkippingPing(ia, qp);
                 Assert.assertEquals(Leader.NEWLEADER, qp.getType());
                 Assert.assertEquals(ZxidUtils.makeZxid(21, 0), qp.getZxid());
@@ -952,7 +942,7 @@ public class Zab1_0Test {
         peer.setTxnFactory(logFactory);
         Field addrField = peer.getClass().getDeclaredField("myQuorumAddr");
         addrField.setAccessible(true);
-        addrField.set(peer, new InetSocketAddress(33556));
+        addrField.set(peer, new InetSocketAddress(PortAssignment.unique()));
         ZKDatabase zkDb = new ZKDatabase(logFactory);
         LeaderZooKeeperServer zk = new LeaderZooKeeperServer(logFactory, peer, new ZooKeeperServer.BasicDataTreeBuilder(), zkDb);
         return zk;
@@ -997,8 +987,55 @@ public class Zab1_0Test {
         peer.setCnxnFactory(new NullServerCnxnFactory());
         File version2 = new File(tmpDir, "version-2");
         version2.mkdir();
-        new FileOutputStream(new File(version2, "currentEpoch")).write("0\n".getBytes());
-        new FileOutputStream(new File(version2, "acceptedEpoch")).write("0\n".getBytes());
+        FileOutputStream fos;
+        fos = new FileOutputStream(new File(version2, "currentEpoch"));
+        fos.write("0\n".getBytes());
+        fos.close();
+        fos = new FileOutputStream(new File(version2, "acceptedEpoch"));
+        fos.write("0\n".getBytes());
+        fos.close();
         return peer;
+    }
+
+    private String readContentsOfFile(File f) throws IOException {
+        return new BufferedReader(new FileReader(f)).readLine();
+    }
+
+    @Test
+    public void testInitialAcceptedCurrent() throws Exception {
+        File tmpDir = File.createTempFile("test", ".dir");
+        tmpDir.delete();
+        tmpDir.mkdir();
+        try {
+            FileTxnSnapLog logFactory = new FileTxnSnapLog(tmpDir, tmpDir);
+            File version2 = new File(tmpDir, "version-2");
+            version2.mkdir();
+            long zxid = ZxidUtils.makeZxid(3, 3);
+
+            TxnHeader hdr = new TxnHeader(1, 1, zxid, 1, ZooDefs.OpCode.error);
+            ErrorTxn txn = new ErrorTxn(1);
+            byte[] buf = Util.marshallTxnEntry(hdr, txn);
+            Request req = new Request(null, 1, 1, ZooDefs.OpCode.error,
+                    ByteBuffer.wrap(buf), null);
+            req.hdr = hdr;
+            req.txn = txn;
+            logFactory.append(req);
+            logFactory.commit();
+            ZKDatabase zkDb = new ZKDatabase(logFactory);
+            QuorumPeer peer = new QuorumPeer();
+            peer.setZKDatabase(zkDb);
+            peer.setTxnFactory(logFactory);
+            peer.getLastLoggedZxid();
+            Assert.assertEquals(3, peer.getAcceptedEpoch());
+            Assert.assertEquals(3, peer.getCurrentEpoch());
+            Assert.assertEquals(3, Integer
+                    .parseInt(readContentsOfFile(new File(version2,
+                            QuorumPeer.CURRENT_EPOCH_FILENAME))));
+            Assert.assertEquals(3, Integer
+                    .parseInt(readContentsOfFile(new File(version2,
+                            QuorumPeer.ACCEPTED_EPOCH_FILENAME))));
+        } finally {
+            recursiveDelete(tmpDir);
+        }
     }
 }
