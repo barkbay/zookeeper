@@ -34,6 +34,12 @@ public class VerGen {
         System.exit(1);
     }
 
+    public static void generateFile(File outputDir, Version version, int rev, String buildDate)
+    {
+        final String revAsString = String.valueOf(rev);
+        generateFile(outputDir, version, revAsString, buildDate);
+    }
+
     public static void generateFile(File outputDir, Version version, String rev, String buildDate)
     {
         String path = PACKAGE_NAME.replaceAll("\\.", "/");
