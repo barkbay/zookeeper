@@ -16,6 +16,7 @@
 
 # Find the current revision, store it in a file
 FILE=$1
-LASTREV=`svn info | grep '^Revision' | sed -e 's/Revision: *//'`
+#LASTREV=`svn info | grep '^Revision' | sed -e 's/Revision: *//'`
+LASTREV=`git log --pretty=format:'%h' -n 1`
 
 echo "lastRevision=${LASTREV}" > $FILE

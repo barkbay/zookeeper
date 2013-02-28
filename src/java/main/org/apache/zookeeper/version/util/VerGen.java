@@ -34,7 +34,7 @@ public class VerGen {
         System.exit(1);
     }
 
-    public static void generateFile(File outputDir, Version version, int rev, String buildDate)
+    public static void generateFile(File outputDir, Version version, String rev, String buildDate)
     {
         String path = PACKAGE_NAME.replaceAll("\\.", "/");
         File pkgdir = new File(outputDir, path);
@@ -83,10 +83,8 @@ public class VerGen {
                     + (version.qualifier == null ? null :
                         "\"" + version.qualifier + "\"")
                     + ";\n");
-            if (rev < 0) {
-                System.out.println("Unknown REVISION number, using " + rev);
-            }
-            w.write("    public static final int REVISION=" + rev + ";\n");
+            System.out.println("REVISION number is " + rev);
+            w.write("    public static final String REVISION=\"" + rev + "\";\n");
             w.write("    public static final String BUILD_DATE=\"" + buildDate
                     + "\";\n");
             w.write("}\n");
@@ -160,11 +158,11 @@ public class VerGen {
                         "Invalid version number format, must be \"x.y.z(-.*)?\"");
                 System.exit(1);
             }
-            int rev;
-            try {
-                rev = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                rev = -1;
+            final String rev;
+            if (args[1] != null && args[1].length() > 0) {
+                rev = args[1];
+            } else {
+                rev = "?";
             }
             generateFile(new File("."), version, rev, args[2]);
         } catch (NumberFormatException e) {
