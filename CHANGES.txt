@@ -42,6 +42,21 @@ BUGFIXES:
   ZOOKEEPER-1613. The documentation still points to 2008 in the
   copyright notice (Edward Ribeiro via phunt)
 
+  ZOOKEEPER-1562. Memory leaks in zoo_multi API
+  (Deepak Jagtap via phunt)
+
+  ZOOKEEPER-1645. ZooKeeper OSGi package imports not complete
+  (Arnoud Glimmerveen via phunt)
+
+  ZOOKEEPER-1648. Fix WatcherTest in JDK7
+  (Thawan Kooburat via phunt)
+
+  ZOOKEEPER-1606. intermittent failures in ZkDatabaseCorruptionTest on
+  jenkins (lixiaofeng via phunt)
+
+  ZOOKEEPER-1647. OSGi package import/export changes not applied to
+  bin-jar (Arnoud Glimmerveen via phunt)
+
 IMPROVEMENTS:
 
   ZOOKEEPER-1564. Allow JUnit test build with IBM Java
