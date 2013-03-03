@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. The ASF
+ * licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
 package org.apache.zookeeper.server.quorum;
 
 import static org.mockito.Matchers.any;
@@ -44,23 +61,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with this
- * work for additional information regarding copyright ownership. The ASF
- * licenses this file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
-
-/**
  * Demonstrate ZOOKEEPER-1382 : Watches leak on expired session
  */
 public class ZK1382Test {
@@ -85,34 +85,40 @@ public class ZK1382Test {
         // Directories are not used but we need it to avoid NPE
         when(logfactory.getDataDir()).thenReturn(new File("/tmp"));
         when(logfactory.getSnapDir()).thenReturn(new File("/tmp"));
-
-        FollowerZooKeeperServer fzks = new FollowerZooKeeperServer(logfactory,
-                quorumPeer, null, database);
-        fzks.startup();
-        fzks.setServerCnxnFactory(serverCnxnFactory);
-        quorumPeer.follower = new MyFollower(quorumPeer, fzks);
-        final SelectionKey sk = new FakeSK();
-        // Simulate a socket channel between a client and a follower
-        final SocketChannel socketChannel = createClientSocketChannel();
-        // Create the NIOServerCnxn that will handle the client requests
-        final NIOServerCnxn nioCnxn = new NIOServerCnxn(fzks, socketChannel,
-                sk, serverCnxnFactory);
-        // Send the connection request as a client do
-        nioCnxn.doIO(sk);
-        // Send the invalid session packet to the follower
-        QuorumPacket qp = createInvalidSessionPacket();
-        quorumPeer.follower.processPacket(qp);
-        // OK, now the follower knows that the session is invalid, let's try to
-        // send it the watches
-        nioCnxn.doIO(sk);
-        // wait for the the request processor to do his job
-        Thread.sleep(1000L);
-        // Session has not been re-validated !
-        // If session has not been validated, there must be NO watches
-        int watchCount = database.getDataTree().getWatchCount();
-        LOG.info("watches = " + watchCount);
-        assertEquals(0, watchCount);
-        fzks.shutdown();
+        FollowerZooKeeperServer fzks = null;
+        try {
+            fzks = new FollowerZooKeeperServer(logfactory, quorumPeer, null,
+                    database);
+            fzks.startup();
+            fzks.setServerCnxnFactory(serverCnxnFactory);
+            quorumPeer.follower = new MyFollower(quorumPeer, fzks);
+            final SelectionKey sk = new FakeSK();
+            // Simulate a socket channel between a client and a follower
+            final SocketChannel socketChannel = createClientSocketChannel();
+            // Create the NIOServerCnxn that will handle the client requests
+            final NIOServerCnxn nioCnxn = new NIOServerCnxn(fzks,
+                    socketChannel, sk, serverCnxnFactory);
+            // Send the connection request as a client do
+            nioCnxn.doIO(sk);
+            // Send the invalid session packet to the follower
+            QuorumPacket qp = createInvalidSessionPacket();
+            quorumPeer.follower.processPacket(qp);
+            // OK, now the follower knows that the session is invalid, let's try
+            // to
+            // send it the watches
+            nioCnxn.doIO(sk);
+            // wait for the the request processor to do his job
+            Thread.sleep(1000L);
+            // Session has not been re-validated !
+            // If session has not been validated, there must be NO watches
+            int watchCount = database.getDataTree().getWatchCount();
+            LOG.info("watches = " + watchCount);
+            assertEquals(0, watchCount);
+        } finally {
+            if (fzks != null) {
+                fzks.shutdown();
+            }
+        }
     }
 
     /**
