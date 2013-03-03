@@ -60,6 +60,9 @@ import org.slf4j.LoggerFactory;
  * the License.
  */
 
+/**
+ * Demonstrate ZOOKEEPER-1382 : Watches leak on expired session
+ */
 public class ZK1382Test {
 
     protected static final Logger LOG = LoggerFactory
@@ -67,6 +70,9 @@ public class ZK1382Test {
 
     final long SESSION_ID = 0xBABEL;
 
+    /**
+     * ZOOKEEPR-1382 test class
+     */
     @Test
     public void testWatchesWithClientSessionTimeout() throws Exception {
 
