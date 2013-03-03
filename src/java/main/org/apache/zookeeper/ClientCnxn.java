@@ -273,6 +273,11 @@ public class ClientCnxn {
             this.watchRegistration = watchRegistration;
         }
 
+        /**
+         * Serialize a packet into a ByteBuffer
+         * 
+         * @return the packet as a {@link ByteBuffer}
+         */
         public ByteBuffer createBB() {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
