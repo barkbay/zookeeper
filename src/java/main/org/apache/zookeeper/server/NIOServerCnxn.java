@@ -204,7 +204,7 @@ public class NIOServerCnxn extends ServerCnxn {
         }
     }
 
-    void doIO(SelectionKey k) throws InterruptedException {
+    public void doIO(SelectionKey k) throws InterruptedException {
         try {
             if (sock == null) {
                 LOG.warn("trying to do i/o on a null socket for session:0x"
