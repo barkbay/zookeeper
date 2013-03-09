@@ -339,7 +339,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
      * If there is no worker thread pool, the SelectorThread performs the I/O
      * directly.
      */
-    class SelectorThread extends AbstractSelectThread {
+    public class SelectorThread extends AbstractSelectThread {
         private final int id;
         private final Queue<SocketChannel> acceptedQueue;
         private final Queue<SelectionKey> updateQueue;
