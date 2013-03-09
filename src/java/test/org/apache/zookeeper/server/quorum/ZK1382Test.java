@@ -81,14 +81,14 @@ public class ZK1382Test {
         final SelectionKey sk = new FakeSK();
         SelectorThread selectorThread = mock(SelectorThread.class);
         when(selectorThread.addInterestOpsUpdateRequest(any(SelectionKey.class))).thenAnswer(new Answer<Boolean>() {
-			@Override
-			public Boolean answer(InvocationOnMock invocation) throws Throwable {
-				SelectionKey sk = (SelectionKey)invocation.getArguments()[0];
-				NIOServerCnxn nioSrvCnx = (NIOServerCnxn)sk.attachment();
-				sk.interestOps(nioSrvCnx.getInterestOps());
-				return true;
-			}
-		});
+            @Override
+            public Boolean answer(InvocationOnMock invocation) throws Throwable {
+                SelectionKey sk = (SelectionKey)invocation.getArguments()[0];
+                NIOServerCnxn nioSrvCnx = (NIOServerCnxn)sk.attachment();
+                sk.interestOps(nioSrvCnx.getInterestOps());
+                return true;
+            }
+        });
 
         ZKDatabase database = new ZKDatabase(null);
         database.setlastProcessedZxid(2L);
@@ -99,8 +99,8 @@ public class ZK1382Test {
         when(logfactory.getSnapDir()).thenReturn(new File(""));
         FollowerZooKeeperServer fzks = null;
         try {
-        	// 
-			fzks = new FollowerZooKeeperServer(logfactory, quorumPeer, database);
+            // 
+            fzks = new FollowerZooKeeperServer(logfactory, quorumPeer, database);
             fzks.startup();
             fzks.setServerCnxnFactory(serverCnxnFactory);
             quorumPeer.follower = new MyFollower(quorumPeer, fzks);
@@ -183,7 +183,7 @@ public class ZK1382Test {
 
         @Override
         public SelectionKey interestOps(int ops) {
-        	System.err.println("ops=" + ops);
+            System.err.println("ops=" + ops);
             this.ops = ops;
             return this;
         }
