@@ -72,7 +72,7 @@ public class ZK1382Test {
     final long SESSION_ID = 0xBABEL;
 
     /**
-     * ZOOKEEPR-1382 test class
+     * ZOOKEEPER-1382 test class
      */
     @Test
     public void testWatchesWithClientSessionTimeout() throws Exception {
@@ -113,7 +113,7 @@ public class ZK1382Test {
             // Send the connection request as a client do
             nioCnxn.doIO(sk);
             // Send the invalid session packet to the follower
-            QuorumPacket qp = createInvalidSessionPacket();
+            QuorumPacket qp = createValidateSessionPacketResponse(false);
             quorumPeer.follower.processPacket(qp);
             // OK, now the follower knows that the session is invalid, let's try
             // to send the watches
@@ -123,7 +123,7 @@ public class ZK1382Test {
             // Session has not been re-validated !
             // If session has not been validated, there must be NO watches
             int watchCount = database.getDataTree().getWatchCount();
-            LOG.info("watches = " + watchCount);
+            LOG.info("session is no more valid, watches = " + watchCount);
             assertEquals(0, watchCount);
         } finally {
             if (fzks != null) {
@@ -131,6 +131,64 @@ public class ZK1382Test {
             }
         }
     }
+    
+    @Test
+    public void testWatchesWithoutClientSessionTimeout() throws Exception {
+
+        NIOServerCnxnFactory serverCnxnFactory = mock(NIOServerCnxnFactory.class);
+        final SelectionKey sk = new FakeSK();
+        SelectorThread selectorThread = mock(SelectorThread.class);
+        when(selectorThread.addInterestOpsUpdateRequest(any(SelectionKey.class))).thenAnswer(new Answer<Boolean>() {
+            @Override
+            public Boolean answer(InvocationOnMock invocation) throws Throwable {
+                SelectionKey sk = (SelectionKey)invocation.getArguments()[0];
+                NIOServerCnxn nioSrvCnx = (NIOServerCnxn)sk.attachment();
+                sk.interestOps(nioSrvCnx.getInterestOps());
+                return true;
+            }
+        });
+
+        ZKDatabase database = new ZKDatabase(null);
+        database.setlastProcessedZxid(2L);
+        QuorumPeer quorumPeer = mock(QuorumPeer.class);
+        FileTxnSnapLog logfactory = mock(FileTxnSnapLog.class);
+        // Directories are not used but we need it to avoid NPE
+        when(logfactory.getDataDir()).thenReturn(new File(""));
+        when(logfactory.getSnapDir()).thenReturn(new File(""));
+        FollowerZooKeeperServer fzks = null;
+        try {
+            // 
+            fzks = new FollowerZooKeeperServer(logfactory, quorumPeer, database);
+            fzks.startup();
+            fzks.setServerCnxnFactory(serverCnxnFactory);
+            quorumPeer.follower = new MyFollower(quorumPeer, fzks);
+            // Simulate a socket channel between a client and a follower
+            final SocketChannel socketChannel = createClientSocketChannel();
+            // Create the NIOServerCnxn that will handle the client requests
+            final NIOServerCnxn nioCnxn = new NIOServerCnxn(fzks,
+                    socketChannel, sk, serverCnxnFactory, selectorThread);
+            sk.attach(nioCnxn);
+            // Send the connection request as a client do
+            nioCnxn.doIO(sk);
+            // Send the valid session packet to the follower
+            QuorumPacket qp = createValidateSessionPacketResponse(true);
+            quorumPeer.follower.processPacket(qp);
+            // OK, now the follower knows that the session is still valid,
+            // let's try to send the watches
+            nioCnxn.doIO(sk);
+            // wait for the the request processor to do his job
+            Thread.sleep(1000L);
+            // Session has been re-validated
+            int watchCount = database.getDataTree().getWatchCount();
+            LOG.info("session is valid, watches = " + watchCount);
+            assertEquals(1, watchCount);
+        } finally {
+            if (fzks != null) {
+                fzks.shutdown();
+            }
+        }
+    }
+
 
     /**
      * A follower with no real leader connection
@@ -183,13 +241,21 @@ public class ZK1382Test {
 
         @Override
         public SelectionKey interestOps(int ops) {
-            System.err.println("ops=" + ops);
             this.ops = ops;
             return this;
         }
 
         @Override
         public int readyOps() {
+            boolean reading = (ops & OP_READ) != 0;
+            boolean writing = (ops & OP_WRITE) != 0;
+            if (reading && writing) {
+                LOG.info("Channel is ready for reading and writing");
+            } else if (reading) {
+                LOG.info("Channel is ready for reading only");
+            } else if (writing) {
+                LOG.info("Channel is ready for writing only");
+            }
             return ops;
         }
 
@@ -280,8 +346,8 @@ public class ZK1382Test {
      * 
      * @throws Exception
      */
-    private QuorumPacket createInvalidSessionPacket() throws Exception {
-        QuorumPacket qp = createValidateSessionQuorumPacket();
+    private QuorumPacket createValidateSessionPacketResponse(boolean valid) throws Exception {
+        QuorumPacket qp = createValidateSessionPacket();
         ByteArrayInputStream bis = new ByteArrayInputStream(qp.getData());
         DataInputStream dis = new DataInputStream(bis);
         long id = dis.readLong();
@@ -289,7 +355,7 @@ public class ZK1382Test {
         DataOutputStream dos = new DataOutputStream(bos);
         dos.writeLong(id);
         // false means that the session has expired
-        dos.writeBoolean(false);
+        dos.writeBoolean(valid);
         qp.setData(bos.toByteArray());
         return qp;
     }
@@ -300,7 +366,7 @@ public class ZK1382Test {
      * @return
      * @throws Exception
      */
-    private QuorumPacket createValidateSessionQuorumPacket() throws Exception {
+    private QuorumPacket createValidateSessionPacket() throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
         dos.writeLong(SESSION_ID);
