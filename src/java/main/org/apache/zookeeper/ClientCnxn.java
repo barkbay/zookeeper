@@ -227,7 +227,7 @@ public class ClientCnxn {
     /**
      * This class allows us to pass the headers and the relevant records around.
      */
-    static class Packet {
+    public static class Packet {
         RequestHeader requestHeader;
 
         ReplyHeader replyHeader;
@@ -254,14 +254,14 @@ public class ClientCnxn {
         public boolean readOnly;
 
         /** Convenience ctor */
-        Packet(RequestHeader requestHeader, ReplyHeader replyHeader,
+        public Packet(RequestHeader requestHeader, ReplyHeader replyHeader,
                Record request, Record response,
                WatchRegistration watchRegistration) {
             this(requestHeader, replyHeader, request, response,
                  watchRegistration, false);
         }
 
-        Packet(RequestHeader requestHeader, ReplyHeader replyHeader,
+        public Packet(RequestHeader requestHeader, ReplyHeader replyHeader,
                Record request, Record response,
                WatchRegistration watchRegistration, boolean readOnly) {
 
@@ -273,7 +273,12 @@ public class ClientCnxn {
             this.watchRegistration = watchRegistration;
         }
 
-        public void createBB() {
+        /**
+         * Serialize a packet into a ByteBuffer
+         * 
+         * @return the packet as a {@link ByteBuffer}
+         */
+        public ByteBuffer createBB() {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 BinaryOutputArchive boa = BinaryOutputArchive.getArchive(baos);
@@ -295,6 +300,7 @@ public class ClientCnxn {
             } catch (IOException e) {
                 LOG.warn("Ignoring unexpected exception", e);
             }
+            return this.bb;
         }
 
         @Override
